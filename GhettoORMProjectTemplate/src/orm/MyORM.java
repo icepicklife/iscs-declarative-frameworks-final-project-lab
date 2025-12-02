@@ -62,7 +62,7 @@ public class MyORM
 			// if more than one field has id throw new RuntimeException("duplicate id=true")
 		
 		new FastClasspathScanner("entity")
-		.matchClassesWithAnnotation(MappedClass.class, c -> {
+		.matchClassesWithAnnotation(Entity.class, c -> {
 			
 			int id_count = 0;
 			

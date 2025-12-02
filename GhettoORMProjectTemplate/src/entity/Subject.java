@@ -17,5 +17,48 @@ public class Subject {
 
 	
 	
+	public Integer getId() {
+		return id;
+	}
+
+
+
+	public void setId(Integer id) {
+		this.id = id;
+	}
+
+
+
+	public String getName() {
+		return name;
+	}
+
+
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+
+
+	public Integer getNumStudents() {
+		return numStudents;
+	}
+
+
+
+	public void setNumStudents(Integer numStudents) {
+		this.numStudents = numStudents;
+	}
+
+
+
+	@Override
+	public String toString() {
+		return "Subject [id=" + id + ", name=" + name + ", numStudents=" + numStudents + "]";
+	}
+
+	
+	
 	// make all the getter/setter/toString
 }

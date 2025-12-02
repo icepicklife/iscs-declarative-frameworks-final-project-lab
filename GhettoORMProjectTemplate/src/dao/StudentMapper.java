@@ -9,18 +9,22 @@ import annotations.Param;
 import annotations.Save;
 import annotations.Select;
 import entity.Student;
+import entity.Subject;
 
 @MappedClass(clazz=Student.class)
 public interface StudentMapper extends BasicMapper<Student>  // all mappers should extend BasicMapper with the correct type
 {
 
 	@CreateTable
+	@MappedClass(clazz = Student.class)
 	public void createTable();	
 	
 	@Save
+	@MappedClass(clazz = Student.class)
 	public void save(Student s);	
 	
 	@Delete
+	@MappedClass(clazz = Student.class)
 	public void delete(Student s);	
 	
 		

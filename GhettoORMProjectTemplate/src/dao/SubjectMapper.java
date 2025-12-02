@@ -16,12 +16,15 @@ public interface SubjectMapper extends BasicMapper<Subject>  // all mappers shou
 {
 
 	@CreateTable
+	@MappedClass(clazz = Subject.class)
 	public void createTable();	
 	
 	@Save
+	@MappedClass(clazz = Subject.class)
 	public void save(Subject s);	
 	
 	@Delete
+	@MappedClass(clazz = Subject.class)
 	public void delete(Subject s);	
 	
 	

@@ -1,10 +1,12 @@
 package orm;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import annotations.*;
 import realdb.GhettoJdbcBlackBox;
 
 public class DaoInvocationHandler implements InvocationHandler {
@@ -18,7 +20,7 @@ public class DaoInvocationHandler implements InvocationHandler {
 		{
 			jdbc = new GhettoJdbcBlackBox();
 			jdbc.init("com.mysql.cj.jdbc.Driver", 				// DO NOT CHANGE
-					  "jdbc:mysql://localhost/jdbcblackbox",    // change jdbcblackbox to the DB name you wish to use
+					  "jdbc:mysql://localhost/studentdb",    // change jdbcblackbox to the DB name you wish to use
 					  "root", 									// USER NAME
 					  "");										// PASSWORD
 		}
@@ -32,6 +34,22 @@ public class DaoInvocationHandler implements InvocationHandler {
 			// @Save
 			// @Delete
 			// @Select
+		
+		if (method.isAnnotationPresent(CreateTable.class)) {
+	        createTable(method);
+	    }
+		
+		if (method.isAnnotationPresent(Delete.class)) {
+	        delete(method, args[0]);
+	    }
+		
+		if (method.isAnnotationPresent(Save.class)) {
+	        save(method, args[0]);
+	    }
+
+	    if (method.isAnnotationPresent(Select.class)) {
+	        return select(method, args);
+	    }
 			
 		return null;
 	}
@@ -65,10 +83,47 @@ public class DaoInvocationHandler implements InvocationHandler {
 		// use reflection to check all the fields for @Column
 		// use the @Column attributed to generate the required sql statment
 		
-		
-		
 // 		Run the sql
 		// jdbc.runSQL(SQL STRING);
+		
+		 // Get the entity class from @MappedClass
+
+	    MappedClass mappedClass = method.getAnnotation(MappedClass.class);
+	    if (mappedClass == null)
+	        throw new RuntimeException("@CreateTable requires @MappedClass on the method");
+
+	    Class<?> clazz = mappedClass.clazz();  // entity class
+	    String tableName = clazz.getSimpleName();
+
+	    String template = "CREATE TABLE <name> (<fields> PRIMARY KEY (<id>))";
+
+	    String fieldString = "";
+	    String pkColumn = null;
+
+	    Field[] fields = clazz.getDeclaredFields();
+	    for (Field f : fields)
+	    {
+	        if (f.isAnnotationPresent(Column.class))
+	        {
+	            Column c = f.getAnnotation(Column.class);
+	            String name = c.name();
+	            String sql = c.sqlType();
+
+	            if (c.id())
+	                pkColumn = name;
+
+	            fieldString += name + " " + sql + ", ";
+	        }
+	    }
+
+	    String returnSql = template
+	            .replace("<name>", tableName)
+	            .replace("<fields>", fieldString)
+	            .replace("<id>", pkColumn);
+
+	    System.out.println("Executing CreateTable SQL: " + returnSql);
+
+	    jdbc.runSQL(returnSql);
 	}
 	
 	// handles @Delete
@@ -89,6 +144,40 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 		// run the sql
 //		jdbc.runSQL(SQL STRING);
+		
+	    MappedClass mapped = method.getAnnotation(MappedClass.class);
+
+	    Class<?> entityClass = mapped.clazz();
+	    String tableName = entityClass.getSimpleName();
+
+	    Field pkField = null;
+	    String pkColumnName = null;
+
+	    for (Field f : entityClass.getDeclaredFields()) {
+	        if (f.isAnnotationPresent(Column.class)) {
+	            Column c = f.getAnnotation(Column.class);
+	            if (c.id()) {
+	                pkField = f;
+	                pkColumnName = c.name();
+	                break;
+	            }
+	        }
+	    }
+
+	    pkField.setAccessible(true);
+
+	    Object pkValue = pkField.get(o);
+
+	    if (pkValue == null) {
+	        throw new RuntimeException("no pk value");
+	    }
+
+	    String pkValueSql = getValueAsSql(pkValue);
+
+	    String sql = "DELETE FROM " + tableName + " WHERE " + pkColumnName + "=" + pkValueSql;
+
+	    System.out.println("Executing Delete SQL: " + sql);
+	    jdbc.runSQL(sql);
 	}
 	
 	// handles @Save
@@ -101,12 +190,42 @@ public class DaoInvocationHandler implements InvocationHandler {
 		// for the Object o parameter, get the value of the field
 			// if the field is null run the insert(Object o, Class entityClass, String tableName) method
 			// if the field is not null run the update(Object o, Class entityClass, String tableName) method
+		
+	    MappedClass mc = method.getAnnotation(MappedClass.class);
+	    if (mc == null)
+	        throw new RuntimeException("@MappedClass annotation missing");
+
+	    Class<?> entityClass = mc.clazz();
+
+	    Field primaryKeyField = null;
+
+	    for (Field field : entityClass.getDeclaredFields()) {
+	        Column c = field.getAnnotation(Column.class);
+	        if (c != null && c.id()) {
+	            primaryKeyField = field;
+	            break;
+	        }
+	    }
+
+	    if (primaryKeyField == null)
+	        throw new RuntimeException("No primary key field found in " + entityClass.getName());
+
+	    primaryKeyField.setAccessible(true);
+	    
+	    Object pkValue = primaryKeyField.get(o);
+
+	    String tableName = entityClass.getSimpleName();  
+
+	    if (pkValue == null) {
+	        insert(o, entityClass, tableName);
+	    } else {
+	        update(o, entityClass, tableName);
+	    }
 
 	}
 
 	private void insert(Object o, Class entityClass, String tableName) throws Exception 
 	{
-		
 		
 // 		SAMPLE SQL		
 //		INSERT INTO table_name (column1, column2, column3, ...)
@@ -118,6 +237,42 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 // 		run sql		
 //		jdbc.runSQL(SQL STRING);
+		
+		String columnsPart = "";
+	    String valuesPart = "";
+
+	    Field[] fields = entityClass.getDeclaredFields();
+
+	    for (Field f : fields) {
+	        Column c = f.getAnnotation(Column.class);
+
+
+	        f.setAccessible(true);
+	        Object value = f.get(o);
+	        
+	        if (c.id() && value == null) {
+	            continue;
+	        }
+
+	        columnsPart += c.name() + ", ";
+
+	        valuesPart += getValueAsSql(value) + ", ";
+	    }
+	    
+	    if (columnsPart.endsWith(", ")) {
+	        columnsPart = columnsPart.substring(0, columnsPart.length() - 2);
+	    }
+
+	    if (valuesPart.endsWith(", ")) {
+	        valuesPart = valuesPart.substring(0, valuesPart.length() - 2);
+	    }
+	    
+	    String sql = "INSERT INTO " + tableName + " (" + columnsPart + ") VALUES (" + valuesPart + ")";
+
+	    System.out.println("Executing SQL: " + sql);
+
+	    jdbc.runSQL(sql);
+	    
 	}
 
 	private void update(Object o, Class entityClass, String tableName) throws IllegalAccessException, Exception {
