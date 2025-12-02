@@ -32,15 +32,18 @@ public interface StudentMapper extends BasicMapper<Student>  // all mappers shou
 	//		always check if the thing being inserted is supposed to be a string, don't forget quotes
 		
 	@Select("select * from :table where pk = :id")   
+	@MappedClass(clazz = Student.class)
 	public Student getById(@Param("id") Integer id);
 	
 	
 	@Select("select * from :table")
+	@MappedClass(clazz = Student.class)
 	public List<Student> getAll();
 	
 	// WARNING: the query itself should no longer have the string quotes
 	// these are to be added based on the parameter type
 	@Select("select * from :table where first_name = :firstName and last_name = :lastName")
+	@MappedClass(clazz = Student.class)
 	public Student getByFirstNameAndLastName(@Param("firstName") String firstName, @Param("lastName") String lastName );
 
 }

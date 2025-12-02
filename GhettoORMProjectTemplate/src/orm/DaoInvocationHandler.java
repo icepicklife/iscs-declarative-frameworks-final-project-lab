@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import annotations.*;
@@ -28,12 +29,6 @@ public class DaoInvocationHandler implements InvocationHandler {
 	
 	@Override
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-		
-		// determine method annotation type and call the appropriate method
-			// @CreateTable
-			// @Save
-			// @Delete
-			// @Select
 		
 		if (method.isAnnotationPresent(CreateTable.class)) {
 	        createTable(method);
@@ -72,21 +67,6 @@ public class DaoInvocationHandler implements InvocationHandler {
 	// handles @CreateTable
 	private void createTable(Method method)
 	{
-		
-// 		SAMPLE SQL 		
-//	    CREATE TABLE REGISTRATION (id INTEGER not NULL AUTO_INCREMENT,
-//												first VARCHAR(255), 
-//												last VARCHAR(255), age INTEGER, PRIMARY KEY ( id ))
-		
-// 		Using the @MappedClass annotation from method
-		// get the required class 		
-		// use reflection to check all the fields for @Column
-		// use the @Column attributed to generate the required sql statment
-		
-// 		Run the sql
-		// jdbc.runSQL(SQL STRING);
-		
-		 // Get the entity class from @MappedClass
 
 	    MappedClass mappedClass = method.getAnnotation(MappedClass.class);
 	    if (mappedClass == null)
@@ -128,23 +108,7 @@ public class DaoInvocationHandler implements InvocationHandler {
 	
 	// handles @Delete
 	private void delete(Method method, Object o) throws Exception
-	{
-// 		SAMPLE SQL		
-//  	DELETE FROM REGISTRATION WHERE ID=1
-		
-		
-// 		Using the @MappedClass annotation from method
-		// get the required class 		
-		// use reflection to check all the fields for @Column
-		// find which field is the primary key
-		// for the Object o parameter, get the value of the field and use this as the primary value 
-		// for the WHERE clause
-				// if the primary key field value is null, throw a RuntimeException("no pk value")
-		
-		
-		// run the sql
-//		jdbc.runSQL(SQL STRING);
-		
+	{	
 	    MappedClass mapped = method.getAnnotation(MappedClass.class);
 
 	    Class<?> entityClass = mapped.clazz();
@@ -183,13 +147,6 @@ public class DaoInvocationHandler implements InvocationHandler {
 	// handles @Save
 	private void save(Method method, Object o) throws Exception
 	{
-// 		Using the @MappedClass annotation from method
-		// get the required class 		
-		// use reflection to check all the fields for @Column
-		// find which field is the primary key
-		// for the Object o parameter, get the value of the field
-			// if the field is null run the insert(Object o, Class entityClass, String tableName) method
-			// if the field is not null run the update(Object o, Class entityClass, String tableName) method
 		
 	    MappedClass mc = method.getAnnotation(MappedClass.class);
 	    if (mc == null)
@@ -227,19 +184,8 @@ public class DaoInvocationHandler implements InvocationHandler {
 	private void insert(Object o, Class entityClass, String tableName) throws Exception 
 	{
 		
-// 		SAMPLE SQL		
-//		INSERT INTO table_name (column1, column2, column3, ...)
-//		VALUES (value1, value2, value3, ...)	
-
-
-//		HINT: columnX comes from the entityClass, valueX comes from o 
-		
-		
-// 		run sql		
-//		jdbc.runSQL(SQL STRING);
-		
-		String columnsPart = "";
-	    String valuesPart = "";
+		String columnsString = "";
+	    String valuesString = "";
 
 	    Field[] fields = entityClass.getDeclaredFields();
 
@@ -254,20 +200,20 @@ public class DaoInvocationHandler implements InvocationHandler {
 	            continue;
 	        }
 
-	        columnsPart += c.name() + ", ";
+	        columnsString += c.name() + ", ";
 
-	        valuesPart += getValueAsSql(value) + ", ";
+	        valuesString += getValueAsSql(value) + ", ";
 	    }
 	    
-	    if (columnsPart.endsWith(", ")) {
-	        columnsPart = columnsPart.substring(0, columnsPart.length() - 2);
+	    if (columnsString.endsWith(", ")) {
+	        columnsString = columnsString.substring(0, valuesString.length() - 2);
 	    }
 
-	    if (valuesPart.endsWith(", ")) {
-	        valuesPart = valuesPart.substring(0, valuesPart.length() - 2);
+	    if (valuesString.endsWith(", ")) {
+	        valuesString = valuesString.substring(0, valuesString.length() - 2);
 	    }
 	    
-	    String sql = "INSERT INTO " + tableName + " (" + columnsPart + ") VALUES (" + valuesPart + ")";
+	    String sql = "INSERT INTO " + tableName + " (" + columnsString + ") VALUES (" + valuesString + ")";
 
 	    System.out.println("Executing SQL: " + sql);
 
@@ -276,60 +222,120 @@ public class DaoInvocationHandler implements InvocationHandler {
 	}
 
 	private void update(Object o, Class entityClass, String tableName) throws IllegalAccessException, Exception {
+	    String setPart = "";
+	    Field pkField = null;
+	    String pkColumnName = null;
+	    Object pkValue = null;
 
-//		SAMPLE SQL		
-//		UPDATE table_name
-//		SET column1 = value1, column2 = value2, ...
-//		WHERE condition;
-		
-//		HINT: columnX comes from the entityClass, valueX comes from o 		
-		
-//		run sql
-//		jdbc.runSQL(SQL STRING);
+	    for (Field f : entityClass.getDeclaredFields()) {
+	        if (f.isAnnotationPresent(Column.class)) {
+	            Column c = f.getAnnotation(Column.class);
+	            f.setAccessible(true);
+	            Object value = f.get(o);
+
+	            if (c.id()) {
+	                pkField = f;
+	                pkColumnName = c.name();
+	                pkValue = value;
+	            } else {
+	                setPart += c.name() + " = " + getValueAsSql(value) + ", ";
+	            }
+	        }
+	    }
+
+	    if (pkField == null) {
+	        throw new RuntimeException("No primary key field found in " + entityClass.getName());
+	    }
+	    if (pkValue == null) {
+	        throw new RuntimeException("Primary key value is null for update");
+	    }
+
+	    if (setPart.endsWith(", ")) {
+	        setPart = setPart.substring(0, setPart.length() - 2);
+	    }
+
+	    String sql = "UPDATE " + tableName + " SET " + setPart + " WHERE " + pkColumnName + " = " + getValueAsSql(pkValue);
+
+	    System.out.println("Executing UPDATE SQL: " + sql);
+
+	    jdbc.runSQL(sql);
 	}
+	
+	//handles @select
+	private Object select(Method method, Object[] args) throws Exception {
 
-		
-	// handles @Select
-	private Object select(Method method, Object[] args) throws Exception
-	{
-		// same style as lab
-		
-// PART I		
-// 		Using the @MappedClass annotation from method
-//		get the required class
-//		Use this class to extra all the column information (this is the replacement for @Results/@Result)		
-//		generate the SELECT QUERY		
+	    MappedClass mapped = method.getAnnotation(MappedClass.class);
+	    if (mapped == null) {
+	        throw new RuntimeException("@MappedClass annotation missing");
+	    }
+	    Class<?> clazz = mapped.clazz();
 
-// PART II
-		
-//		this will pull actual values from the DB		
-//		List<HashMap<String, Object>> results = jdbc.runSQLQuery(SQL QUERY);
+	    String tableName = clazz.getSimpleName();
 
-		
-		// process list based on getReturnType
-		if (method.getReturnType()==List.class)
-		{
-			List returnValue = new ArrayList();
-			
-			// create an instance for each entry in results based on mapped class
-			// map the values to the corresponding fields in the object
-			// DO NOT HARD CODE THE TYPE and FIELDS USE REFLECTION
-			
-			return returnValue;
-		}
-		else
-		{
-			// if not a list return type
-			
-			// if the results.size() == 0 return null
-			// if the results.size() >1 throw new RuntimeException("More than one object matches")
-			// if the results.size() == 1
-				// create one instance based on mapped class
-				// map the values to the corresponding fields in the object
-				// DO NOT HARD CODE THE TYPE and FIELDS USE REFLECTION
-						
-			return null;
-		}
+	    Select selectAnn = method.getAnnotation(Select.class);
+	    if (selectAnn == null) {
+	        throw new RuntimeException("@Select annotation missing");
+	    }
+	    String sqlString = selectAnn.value().replace(":table", tableName);
+
+	    java.lang.reflect.Parameter[] params = method.getParameters();
+	    for (int i = 0; i < params.length; i++) {
+	        java.lang.reflect.Parameter p = params[i];
+	        if (p.isAnnotationPresent(Param.class)) {
+	            String paramName = p.getAnnotation(Param.class).value();
+	            Object paramValue = args[i];
+	            if (paramValue instanceof String) {
+	                sqlString = sqlString.replace(":" + paramName, "\"" + paramValue + "\"");
+	            } else {
+	                sqlString = sqlString.replace(":" + paramName, paramValue.toString());
+	            }
+	        }
+	    }
+
+	    List<HashMap<String, Object>> results = jdbc.runSQLQuery(sqlString);
+
+	    if (method.getReturnType() == List.class) {
+	        List<Object> returnValue = new ArrayList<>();
+	        for (HashMap<String, Object> result : results) {
+	            Object o = clazz.getDeclaredConstructor().newInstance();
+
+	            for (String columnName : result.keySet()) {
+	                for (Field f : clazz.getDeclaredFields()) {
+	                    if (f.isAnnotationPresent(Column.class)) {
+	                        Column col = f.getAnnotation(Column.class);
+	                        if (col.name().equals(columnName)) {
+	                            f.setAccessible(true);
+	                            f.set(o, result.get(columnName));
+	                        }
+	                    }
+	                }
+	            }
+
+	            returnValue.add(o);
+	        }
+	        return returnValue;
+	    } else {
+	        if (results.isEmpty()) {
+	            return null;
+	        }
+
+	        HashMap<String, Object> result = results.get(0);
+	        Object o = clazz.getDeclaredConstructor().newInstance();
+
+	        for (String columnName : result.keySet()) {
+	            for (Field f : clazz.getDeclaredFields()) {
+	                if (f.isAnnotationPresent(Column.class)) {
+	                    Column col = f.getAnnotation(Column.class);
+	                    if (col.name().equals(columnName)) {
+	                        f.setAccessible(true);
+	                        f.set(o, result.get(columnName));
+	                    }
+	                }
+	            }
+	        }
+
+	        return o;
+	    }
 	}
 	
 }
