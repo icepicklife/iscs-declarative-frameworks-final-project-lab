@@ -206,7 +206,7 @@ public class DaoInvocationHandler implements InvocationHandler {
 	    }
 	    
 	    if (columnsString.endsWith(", ")) {
-	        columnsString = columnsString.substring(0, valuesString.length() - 2);
+	        columnsString = columnsString.substring(0, columnsString.length() - 2);
 	    }
 
 	    if (valuesString.endsWith(", ")) {
